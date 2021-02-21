@@ -1,0 +1,16 @@
+{
+  "name": "roon-extension-ortho-remote",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Roon Extension for volume control using the Teenage Engineering OR-1 ortho remote",
+  "main": "app.js",
+  "author": "dfuchslin",
+  "license": "MIT",
+  "dependencies": {
+    "node-roon-api": "github:roonlabs/node-roon-api",
+    "node-roon-api-settings": "github:roonlabs/node-roon-api-settings",
+    "node-roon-api-status": "github:roonlabs/node-roon-api-status",
+    "node-roon-api-transport": "github:roonlabs/node-roon-api-transport",
+    "ortho-remote": "^0.3.0"
+  }
+}
