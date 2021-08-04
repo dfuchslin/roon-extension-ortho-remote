@@ -141,8 +141,6 @@ async function setup_remote() {
       orthoremote.on('disconnect', async () => {
         remote_status = 'disconnected';
         update_status();
-        // how to do this cleanly?
-        await orthoremote.connect();
       });
 
     } else {
