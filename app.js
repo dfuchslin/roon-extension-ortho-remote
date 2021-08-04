@@ -1,6 +1,6 @@
 "use strict";
 
-import { DeviceDiscoveryManager } from 'ortho-remote'
+import { getInputs, Input } from 'easymidi';
 import RoonApi from "node-roon-api";
 import RoonApiSettings from 'node-roon-api-settings';
 import RoonApiStatus from 'node-roon-api-status';
@@ -15,156 +15,167 @@ var roon = new RoonApi({
   publisher: 'gyttja',
   email: 'david',
   website: 'https://github.com/dfuchslin/',
-
-  core_paired: function (core_) {
-    core = core_;
-
-    let transport = core.services.RoonApiTransport;
-    transport.subscribe_zones(function (cmd, data) {
-      try {
-        if (cmd == "Changed" && data['zones_changed']) {
-          data.zones_changed.forEach(z => {
-            if (z.outputs) {
-              let found = false;
-              z.outputs.forEach(o => { console.log(o.output_id, mysettings.zone.output_id); found = found || o.output_id == mysettings.zone.output_id; });
-              if (found) {
-                if (playingstate != z.state) {
-                  playingstate = z.state;
+  
+    core_paired: function (core_) {
+      core = core_;
+  
+      let transport = core.services.RoonApiTransport;
+      transport.subscribe_zones(function (cmd, data) {
+        try {
+          if (cmd == "Changed" && data['zones_changed']) {
+            data.zones_changed.forEach(z => {
+              if (z.outputs) {
+                let found = false;
+                z.outputs.forEach(o => { console.log(o.output_id, mysettings.zone.output_id); found = found || o.output_id == mysettings.zone.output_id; });
+                if (found) {
+                  if (playingstate != z.state) {
+                    playingstate = z.state;
+                    update_led();
+                  }
                 }
               }
-            }
-          });
+            });
+          }
+        } catch (e) {
         }
-      } catch (e) {
-      }
-    });
-  },
-  core_unpaired: function (core_) {
-    core = undefined;
-  }
-});
-
-var mysettings = Object.assign({
-  zone: null,
-}, roon.load_config("settings") || {});
-
-function makelayout(settings) {
-  var l = {
-    values: settings,
-    layout: [],
-    has_error: false
-  };
-
-  l.layout.push({
-    type: "zone",
-    title: "Zone",
-    setting: "zone",
+      });
+    },
+    core_unpaired: function (core_) {
+      core = undefined;
+    }
   });
-
-  return l;
-}
-
-var svc_settings = new RoonApiSettings(roon, {
-  get_settings: function (cb) {
-    cb(makelayout(mysettings));
-  },
-  save_settings: function (req, isdryrun, settings) {
-    let l = makelayout(settings.values);
-    req.send_complete(l.has_error ? "NotValid" : "Success", { settings: l });
-
-    if (!isdryrun && !l.has_error) {
-      mysettings = l.values;
-      svc_settings.update_settings(l);
-      roon.save_config("settings", mysettings);
-    }
-  }
-});
-
-var svc_status = new RoonApiStatus(roon);
-
-roon.init_services({
-  required_services: [RoonApiTransport],
-  provided_services: [svc_settings, svc_status],
-});
-
-var remote_status = 'neverconnected';
-var orthoremote = undefined;
-
-function update_status() {
-  switch (remote_status) {
-    case 'neverconnected':
-      svc_status.set_status('Looking for Ortho Remote', true)
-      break;
-    case 'connected':
-      svc_status.set_status('Ortho Remote connected', false);
-      break;
-    case 'disconnected':
-      svc_status.set_status('Ortho Remote disconnected: wake the remote to reconnect', true)
-      break;
-    case 'connecting':
-      svc_status.set_status('Ortho Remote found, connecting', true);
-      break;
-  }
-}
-
-async function setup_remote() {
-  try {
-    update_status();
-
-    console.log(`remote_status=${remote_status}`);
-    if (remote_status === 'neverconnected') {
-      console.log('connecting remote first time');
-      const manager = DeviceDiscoveryManager.defaultManager
-      const session = manager.startDiscoverySession({ timeoutMs: 10000 })
-
-      console.log('awaiting first device');
-      orthoremote = await session.waitForFirstDevice()
-      console.log('device found');
-      remote_status = 'connecting';
-      update_status();
-    }
-
-    if (await orthoremote.connect()) {
-      remote_status = 'connected';
-
-      orthoremote.on('click', () => { ev_playpause() });
-      orthoremote.on('rotate', (rotation) => {
-        const volume = parseInt(90 * rotation);
-        core.services.RoonApiTransport.change_volume(mysettings.zone, 'absolute', volume);
-      })
-
-      orthoremote.on('connect', () => {
-        remote_status = 'connected';
-        update_status();
+  
+  var mysettings = Object.assign({
+    zone: null,
+    pressaction: "togglemute",
+    longpressaction: "stop",
+    longpresstimeout: 500,
+    rotateaction: "volume",
+    led: "on",
+    seekamount: 5,
+    rotationdampener: 1
+  }, roon.load_config("settings") || {});
+  
+  function makelayout(settings) {
+    var l = {
+      values: settings,
+      layout: [],
+      has_error: false
+    };
+  
+    l.layout.push({
+      type: "zone",
+      title: "Zone",
+      setting: "zone",
+    });
+  
+    if (settings.rotateaction != "none") {
+      l.layout.push({
+        type: "dropdown",
+        title: "Rotation Dampener",
+        values: [
+          { title: "None", value: 1 },
+          { title: "Some", value: 3 },
+          { title: "More", value: 5 },
+          { title: "Most", value: 7 },
+        ],
+        setting: "rotationdampener",
       });
-
-      orthoremote.on('disconnect', async () => {
-        remote_status = 'disconnected';
-        update_status();
-      });
-
+    }
+  
+    return l;
+  }
+  
+  var svc_settings = new RoonApiSettings(roon, {
+    get_settings: function (cb) {
+      cb(makelayout(mysettings));
+    },
+    save_settings: function (req, isdryrun, settings) {
+      let l = makelayout(settings.values);
+      req.send_complete(l.has_error ? "NotValid" : "Success", { settings: l });
+  
+      if (!isdryrun && !l.has_error) {
+        mysettings = l.values;
+        svc_settings.update_settings(l);
+        roon.save_config("settings", mysettings);
+      }
+    }
+  });
+  
+  var svc_status = new RoonApiStatus(roon);
+  
+  roon.init_services({
+    required_services: [RoonApiTransport],
+    provided_services: [svc_settings, svc_status],
+  });
+  
+  let orthoremote = {};
+  orthoremote.errors = 0;
+  orthoremote.volume_steps = 127.0;
+  
+  function update_status() {
+    if (orthoremote.input) {
+      svc_status.set_status('Ortho remote connected', false);
     } else {
-      remote_status = 'neverconnected';
+      svc_status.set_status('Ortho remote disconnected', true)
     }
-
-    update_status();
-
-  } catch (e) {
-    console.log(e.message);
-    remote_status = 'neverconnected';
-    update_status();
   }
-}
+  
+  function setup_orthoremote() {
+    if (orthoremote.input) {
+      orthoremote.input.close();
+      delete (orthoremote.input);
+    }
+  
+    try {
+      orthoremote.input = new Input(getInputs().filter(i => i.includes('ortho'))[0]);
+      orthoremote.input.on('noteon', ev_playpause);
+      orthoremote.input.on('cc', ev_volume);
+      orthoremote.input.on('reset', () => {
+        delete (orthoremote.input);
+        update_status();
+      });
+      orthoremote.errors = 0;
+      update_status();
 
-function ev_playpause() {
-  core.services.RoonApiTransport.control(mysettings.zone, 'playpause');
-}
+    } catch (e) {
+      if (orthoremote.errors % 100 == 0) {
+        console.log(e.message);
+        orthoremote.errors = 0;
+      }
+      orthoremote.errors += 1;
+    }
+  }
 
+  function ev_playpause(e) {
+    if (e.note === 60) {
+      console.log('ortho remote button pressed');
+      core.services.RoonApiTransport.control(mysettings.zone, 'playpause');
+    } else {
+      console.log('ortho remote button pressed with an unexpected value', e);
+    }
+  }
+  
+  function ev_volume(e) {
+    const value = e.value;
+    console.log('ortho remote volume requested', value);
 
-setup_remote();
-update_status();
-/*setInterval(() => {
-  if (remote_status === 'disconnected') setup_remote();
-}, 1000);*/
+    // how to get the Output object??
+    //console.log('outputs:', core.services.RoonApiTransport.get_outputs(console.log));
 
-roon.start_discovery();
+    //const outputVolume = mysettings.zone.outputs[0].volume;
+    const outputVolume = { type: 'db', min: -70, max: 0 };
+    if (outputVolume.type === 'db' || outputVolume.type === 'number') {
+      let stepSize = (outputVolume.max - outputVolume.min) / orthoremote.volume_steps;
+      let newVolume = new Number((stepSize * value).toFixed(0)) + outputVolume.min;
+      console.log('set volume to', newVolume);
+      core.services.RoonApiTransport.change_volume(mysettings.zone, 'absolute', newVolume);
+    }
+  }
+  
+  setup_orthoremote();
+  update_status();
+  setInterval(() => { if (!orthoremote.input) setup_orthoremote(); }, 1000);
+  
+  roon.start_discovery();
+  
