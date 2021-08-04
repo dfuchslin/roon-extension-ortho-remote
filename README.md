@@ -5,6 +5,10 @@ Volume control for roon.
 work in progress... 
 
 
+ortho remote guide:
+https://teenage.engineering/guides/or-1
+
+
 ### HID did not work as the device seems to report with the BLE MIDI profile/setting/characteristics
 
 Pair the remote:
@@ -209,3 +213,46 @@ Make sure users in the `input` group can read /dev/hidraw* (or use sudo):
 KERNEL=="hidraw*", GROUP="input", MODE="0660"
 
 sudo udevadm trigger (or reboot)
+
+
+
+install bluez:
+
+wget www.kernel.org/pub/linux/bluetooth/bluez-5.56.tar.xz
+sudo apt-get install libdbus-1-dev libglib2.0-dev libudev-dev libical-dev libreadline-dev -y
+tar xvf bluez-5.56.tar.xz && cd bluez-5.56
+cat configure
+cat configure | grep midi
+./configure --prefix=/usr --mandir=/usr/share/man --sysconfdir=/etc --localstatedir=/var --enable-experimental --enable-midi
+make -j4
+sudo dpkg -r --force-depends "bluez"
+sudo make install
+bluetoothctl --version
+
+masked:
+sudo rm /etc/systemd/system/bluetooth.service
+sudo systemctl unmask bluetooth.service
+sudo systemctl enable bluetooth.service
+sudo systemctl restart bluetooth
+sudo systemctl status bluetooth
+
+
+
+ls -l /lib/udev/rules.d
+cat /lib/udev/rules.d/97-hid2hci.rules
+sudo cat /var/log/syslog | grep -i bluetooth
+sudo systemctl start bluetooth
+sudo systemctl enable bluetooth
+ls -l /lib/systemd/system/bluetooth.
+ls -l /lib/systemd/system/bluetooth.*
+sudo systemctl daemon-reload
+sudo systemctl enable bluetooth
+sudo systemctl is-enabled bluetooth
+file /lib/systemd/system/bluetooth.service
+cat /lib/systemd/system/bluetooth.target
+cat /lib/systemd/system/bluetooth.service
+sudo systemctl enable bluetooth
+ls -l /etc/systemd/system
+
+
+Docs: https://docs.silabs.com/bluetooth/latest/code-examples/applications/midi-over-ble
