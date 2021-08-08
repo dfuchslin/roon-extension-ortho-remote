@@ -3,6 +3,7 @@ import RoonApi from 'node-roon-api';
 import RoonApiSettings from 'node-roon-api-settings';
 import RoonApiStatus from 'node-roon-api-status';
 import RoonApiTransport from 'node-roon-api-transport';
+import midi from 'node-midi';
 
 let playingstate = '';
 let core;
@@ -116,8 +117,19 @@ const orthoremote = {};
 orthoremote.volumeSteps = 127.0;
 orthoremote.errors = {};
 
+function getInputsOverride() {
+  const input = new midi.input();
+  const inputs = [];
+  for (let i = 0; i < input.getPortCount(); i++) {
+    inputs.push(input.getPortName(i));
+  }
+  input.closePort();
+  input.release();
+  return inputs;
+}
+
 function getInputHandle() {
-  return getInputs().find((i) => i.includes('ortho'));
+  return getInputsOverride().find((i) => i.includes('ortho'));
 }
 
 function onPlayPause(e) {
@@ -146,7 +158,7 @@ function onVolumeChange(e) {
   const outputVolume = { type: 'db', min: -70, max: 0 };
   if (outputVolume.type === 'db' || outputVolume.type === 'number') {
     const stepSize = (outputVolume.max - outputVolume.min) / orthoremote.volumeSteps;
-    const newVolume = new Number((stepSize * value).toFixed(0)) + outputVolume.min;
+    const newVolume = Number((stepSize * value).toFixed(0)) + outputVolume.min;
     console.log('set volume to', newVolume);
     core.services.RoonApiTransport.change_volume(mysettings.zone, 'absolute', newVolume);
   }
@@ -171,9 +183,9 @@ function backoffLogging(e) {
     .reduce((acc, cur) => acc + cur, 0);
   if (numOfLoggedErrors < 1) {
     updateStatus();
-    console.log(msg);
+    console.error(msg);
   } else if (numOfLoggedErrors > 1000) {
-    console.log('mulitple errors', orthoremote.errors);
+    console.error('mulitple errors', orthoremote.errors);
     resetErrors();
   }
 
@@ -206,6 +218,6 @@ function setupOrthoremote() {
 }
 
 setupOrthoremote();
-setInterval(() => { if (!getInputHandle() || !orthoremote.input) setupOrthoremote(); }, 100);
+setInterval(() => { if (!getInputHandle() || !orthoremote.input) setupOrthoremote(); }, 250);
 
 roon.start_discovery();
