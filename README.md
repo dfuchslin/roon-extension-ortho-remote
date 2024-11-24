@@ -260,3 +260,9 @@ ls -l /etc/systemd/system
 
 
 Docs: https://docs.silabs.com/bluetooth/latest/code-examples/applications/midi-over-ble
+
+
+sync to rpi:
+```
+rsync -av . rpi-bmwmid:roon-extension-ortho-remote/ --exclude .git --exclude-from=.gitignore
+```
