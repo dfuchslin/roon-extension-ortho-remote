@@ -9,6 +9,9 @@ ortho remote guide:
 https://teenage.engineering/guides/or-1
 
 
+Problems with midi:
+https://github.com/justinlatimer/node-midi/issues/118
+
 ### HID did not work as the device seems to report with the BLE MIDI profile/setting/characteristics
 
 Pair the remote:
@@ -188,7 +191,8 @@ B: MSC=10
 
 Verify node-hid can find the device, https://github.com/node-hid/node-hid#installation
 
-$ hid-showdevices hidraw
+$ npm install node-hid
+$ npx hid-showdevices hidraw
 driverType: hidraw
 devices: [
   {

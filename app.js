@@ -1,4 +1,4 @@
-import { getInputs, Input } from 'easymidi';
+import { Input } from 'easymidi';
 import RoonApi from 'node-roon-api';
 import RoonApiSettings from 'node-roon-api-settings';
 import RoonApiStatus from 'node-roon-api-status';
@@ -217,7 +217,14 @@ function setupOrthoremote() {
   }
 }
 
+function isRemoteConnected() {
+  if (orthoremote.input && !orthoremote.input.isPortOpen()) {
+    console.log('input port is not open');
+  }
+  return orthoremote.input && orthoremote.input.isPortOpen() && getInputHandle();
+}
+
 setupOrthoremote();
-setInterval(() => { if (!getInputHandle() || !orthoremote.input) setupOrthoremote(); }, 250);
+setInterval(() => { if (!isRemoteConnected()) setupOrthoremote(); }, 250);
 
 roon.start_discovery();
